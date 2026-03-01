@@ -9,7 +9,7 @@ import streamlit as st
 
 # --- Regex για γραμμή report ---
 # Πιάνει και περιπτώσεις που ο αριθμός "κολλάει" με την ημερομηνία, π.χ. 4341906/7/25
-LINE_RE = re.compile(r"^\s*(\d{5,8})\s*(\d{1,2}/\d{1,2}/\d{2})\s+(.*)$")
+LINE_RE = re.compile(r"^\s*(\d{1,2}/\d{1,2}/\d{2})\s+(\d{5,8})\s+(\d+)\s+([123S][A-Z0-9]{2,6})\s+(.*)$")
 
 # Πιάνει κωδικό τμήματος που ξεκινά με 1/2/3/S, π.χ. 3DW1, 2DA1, 3T08, 2TS1
 DEPTCODE_RE = re.compile(r"\b([123S][A-Z0-9]{2,6})\b")
@@ -172,3 +172,4 @@ st.download_button(
     file_name=f"access_open_orders_{stamp}.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 )
+
