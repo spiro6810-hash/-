@@ -7,12 +7,13 @@ import pandas as pd
 import streamlit as st
 
 
-# --- Regex για γραμμή report ---
-# Πιάνει και περιπτώσεις που ο αριθμός "κολλάει" με την ημερομηνία, π.χ. 4341906/7/25
-LINE_RE = re.compile(r"^\s*(\d{1,2}/\d{1,2}/\d{2})\s+(\d{5,8})\s+(\d+)\s+([123S][A-Z0-9]{2,6})\s+(.*)$")
-
-# Πιάνει κωδικό τμήματος που ξεκινά με 1/2/3/S, π.χ. 3DW1, 2DA1, 3T08, 2TS1
-DEPTCODE_RE = re.compile(r"\b([123S][A-Z0-9]{2,6})\b")
+# -------------------------------------------------
+# Access PDF line format (from your report)
+# Example: 6/7/25 434190 2 2DA1 ...
+# -------------------------------------------------
+LINE_RE = re.compile(
+    r"^\s*(\d{1,2}/\d{1,2}/\d{2})\s+(\d{5,8})\s+(\d+)\s+([123S][A-Z0-9]{2,6})\s+(.*)$"
+)
 
 
 def dept_from_access_deptcode(code: str) -> str:
@@ -42,20 +43,22 @@ def extract_open_from_access_pdf(file_bytes: bytes) -> pd.DataFrame:
                 if not m:
                     continue
 
-                entoli = m.group(1)
-                hmer = m.group(2)
-                rest = m.group(3)
+                hmer = m.group(1)
+                entoli = m.group(2)
+                vardia = m.group(3)
+                dept_code = m.group(4)
+                rest = m.group(5)  # not used yet, but kept for future
 
-                dept_candidates = DEPTCODE_RE.findall(rest)
-                dept_code = dept_candidates[-1] if dept_candidates else ""
-
-                rows.append({
-                    "Τμήμα": dept_from_access_deptcode(dept_code),
-                    "Εντολή": entoli,
-                    "Ημ/νία": hmer,
-                    "Τμήμα_κωδ": dept_code,
-                    "Raw": line,
-                })
+                rows.append(
+                    {
+                        "Τμήμα": dept_from_access_deptcode(dept_code),
+                        "Εντολή": entoli,
+                        "Ημ/νία": hmer,
+                        "Βάρδια": vardia,
+                        "Τμήμα_κωδ": dept_code,
+                        "Raw": line,
+                    }
+                )
 
     df = pd.DataFrame(rows)
     if not df.empty:
@@ -84,7 +87,6 @@ if uploaded is None:
     st.stop()
 
 st.success(f"Ανέβηκε: {uploaded.name} ({uploaded.size} bytes)")
-
 df_open = extract_open_from_access_pdf(uploaded.read())
 
 if df_open.empty:
@@ -114,7 +116,8 @@ with c5:
         st.session_state.quick_dept = "Τραμ"
 
 # Filters
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
+
 with col1:
     dept_options = sorted(df_open["Τμήμα"].unique().tolist())
     default_dept = dept_options
@@ -123,9 +126,15 @@ with col1:
     dept = st.multiselect("Τμήμα", dept_options, default=default_dept)
 
 with col2:
+    shift_options = sorted(df_open["Βάρδια"].astype(str).unique().tolist())
+    shift = st.multiselect("Βάρδια", shift_options, default=shift_options)
+
+with col3:
     age_bucket = st.selectbox("Παλαιότητα", ["Όλες", "> 7 μέρες", "> 30 μέρες"], index=0)
 
 filtered = df_open[df_open["Τμήμα"].isin(dept)].copy()
+filtered = filtered[filtered["Βάρδια"].astype(str).isin(shift)]
+
 if age_bucket == "> 7 μέρες":
     filtered = filtered[filtered["Ημέρες_ανοικτή"] > 7]
 elif age_bucket == "> 30 μέρες":
@@ -159,7 +168,7 @@ st.subheader("Παλαιότητα ανά τμήμα")
 st.dataframe(aging, use_container_width=True)
 
 st.subheader("Λίστα ανοιχτών")
-show_cols = ["Τμήμα", "Εντολή", "Ημ/νία", "Ημέρες_ανοικτή", "Τμήμα_κωδ", "Raw"]
+show_cols = ["Τμήμα", "Εντολή", "Ημ/νία", "Ημέρες_ανοικτή", "Βάρδια", "Τμήμα_κωδ", "Raw"]
 filtered_view = filtered[show_cols].sort_values(["Τμήμα", "Ημέρες_ανοικτή"], ascending=[True, False])
 st.dataframe(filtered_view, use_container_width=True, height=520)
 
@@ -172,4 +181,5 @@ st.download_button(
     file_name=f"access_open_orders_{stamp}.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 )
+
 
